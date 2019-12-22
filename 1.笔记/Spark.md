@@ -144,6 +144,25 @@ parax      # 第13行
 - 向main方法传递的参数必须写在application jar之后。
 
 
+## 定时任务执行
+> 首先，先编写start.sh
+```$xslt
+#/bin/bash
+
+spark-submit --master yarn \
+--name IotIoState5minJob \
+--executor-memory 1G \
+--executor-cores 1 \
+--num-executors 3  \
+--driver-memory 1G \
+--conf "spark.ui.port=45053" \
+--conf "spark.driver.extraJavaOptions=-XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+PrintGCDetails -verbose:gc -XX:+PrintGCTimeStamps" \
+--class com.cserver.job.IotIoState5minJob /app/lib/spark-demo-1.0.jar \
+``` 
+> 其次，  vi /etc/crontab
+> 添加，后面是输出打印日志    */5 * * * * root su - hdfs -c /app/start.sh >> /app/spark.log
+
+
 
 
 
