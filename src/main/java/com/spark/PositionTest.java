@@ -60,7 +60,8 @@ public class PositionTest implements Serializable {
 
         //将手机号码RDD创建为DataSet，为了能够使用SQL查询方式
         Dataset<Row> telDataSet = spark.createDataFrame(telRDD, Position.class);
-        telDataSet.createOrReplaceGlobalTempView("telView");
+//        telDataSet.createOrReplaceGlobalTempView("telView");
+        telDataSet.createOrReplaceTempView("telView");
 //        Broadcast<Dataset<Row>> telDataSetBroad = javaSparkContext.broadcast(telDataSet);
 
         //该变量主要是要与存储距离相差的所有对象
@@ -98,7 +99,8 @@ public class PositionTest implements Serializable {
      * @return
      */
     private static void rowDataset(Dataset<Row> dataset, long startTime, long endTime, String tels, String card, Broadcast<List<ReduceData>> lengthListBroad) {
-        String sql = "select J,W,tel from global_temp.telView where event_id between " + startTime + " and " + endTime + " and tel in (" + tels + ")";
+//        String sql = "select J,W,tel from global_temp.telView where event_id between " + startTime + " and " + endTime + " and tel in (" + tels + ")";
+        String sql = "select J,W,tel from telView where event_id between " + startTime + " and " + endTime + " and tel in (" + tels + ")";
         SQLContext sqlContext = dataset.sqlContext();
         Dataset<Row> rowDataset = sqlContext.sql(sql);
 //        Dataset<Row> rowDataset = dataset.where("event_id between " + startTime + " and " + endTime).where("tel in (" + tels + ")").select("j,w,tel");
