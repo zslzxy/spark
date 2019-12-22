@@ -1,7 +1,6 @@
 package com.spark;
 
 import com.alibaba.fastjson.JSON;
-import lombok.val;
 import org.apache.commons.lang.StringUtils;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -9,7 +8,10 @@ import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.*;
 
 import java.io.Serializable;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -71,6 +73,7 @@ public class PositionTest implements Serializable {
         Properties properties = new Properties();
         properties.setProperty("user","root");
         properties.setProperty("password","123456");
+        //指定模式，以追加的方式 Overwrite 覆盖   ErrorIfExists存在则报错   Ignore 忽略  append 追加
         lengthDataSet.write().mode(SaveMode.Append).jdbc("jdbc:mysql://127.0.0.1:3306/yien","reduce",properties);
 
 
