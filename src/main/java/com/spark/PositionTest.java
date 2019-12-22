@@ -1,20 +1,15 @@
 package com.spark;
 
 import com.alibaba.fastjson.JSON;
+import lombok.val;
 import org.apache.commons.lang.StringUtils;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
-import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.*;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -55,7 +50,8 @@ public class PositionTest implements Serializable {
         telDataSet.createOrReplaceGlobalTempView("telView");
 //        Broadcast<Dataset<Row>> telDataSetBroad = javaSparkContext.broadcast(telDataSet);
 
-        Broadcast<List<Map<String, Object>>> lengthListBroad = javaSparkContext.broadcast(new CopyOnWriteArrayList<>());
+        //该变量主要是要与存储距离相差的所有对象
+        Broadcast<List<ReduceData>> lengthListBroad = javaSparkContext.broadcast(new CopyOnWriteArrayList<>());
 
         //将身份证转成集合，遍历集合，计算该身份证所属手机具有哪一些经纬度差异较大的数据
         idCardRDD.collect().forEach(idCard -> {
@@ -68,6 +64,16 @@ public class PositionTest implements Serializable {
                 System.out.println(lengthListBroad.getValue().size());
             }
         });
+
+        //将计算出的距离差距差了多大的集合写入到数据库中lengthListBroad
+        Dataset<Row> lengthDataSet = spark.createDataFrame(lengthListBroad.getValue(), ReduceData.class);
+        System.out.println(lengthDataSet.count());
+        Properties properties = new Properties();
+        properties.setProperty("user","root");
+        properties.setProperty("password","123456");
+        lengthDataSet.write().mode(SaveMode.Append).jdbc("jdbc:mysql://127.0.0.1:3306/yien","reduce",properties);
+
+
         spark.stop();
         javaSparkContext.stop();
     }
@@ -80,7 +86,7 @@ public class PositionTest implements Serializable {
      * @param tels
      * @return
      */
-    private static void rowDataset(Dataset<Row> dataset, long startTime, long endTime, String tels, String card, Broadcast<List<Map<String, Object>>> lengthListBroad) {
+    private static void rowDataset(Dataset<Row> dataset, long startTime, long endTime, String tels, String card, Broadcast<List<ReduceData>> lengthListBroad) {
         String sql = "select J,W,tel from global_temp.telView where event_id between " + startTime + " and " + endTime + " and tel in (" + tels + ")";
         SQLContext sqlContext = dataset.sqlContext();
         Dataset<Row> rowDataset = sqlContext.sql(sql);
@@ -89,18 +95,19 @@ public class PositionTest implements Serializable {
         rowDataset.foreach(x -> {
             double lng = Double.valueOf(x.get(0).toString());
             double lat = Double.valueOf(x.get(1).toString());
-            double lng1 = lng - 0.5;
-            double lat1 = lat - 0.5;
+            double lng1 = lng - 0.2;
+            double lat1 = lat - 0.2;
             double length = GetDistance(lat, lng, lat1, lng1);
             if (length > 100) {
-                Map<String, Object> map = new HashMap<>();
-                map.put("tel", x.get(1).toString());
-                map.put("J",lng);
-                map.put("W",lat);
-                map.put("J1",lng1);
-                map.put("W1",lat1);
-                map.put("card",card);
-                lengthListBroad.getValue().add(map);
+//                Map<String, Object> map = new HashMap<>();
+//                map.put("tel", x.get(1).toString());
+//                map.put("J",lng);
+//                map.put("W",lat);
+//                map.put("J1",lng1);
+//                map.put("W1",lat1);
+//                map.put("card",card);
+                ReduceData builder = ReduceData.builder().lat(lat).lat1(lat1).lng(lng).lng1(lng1).center_val(card).relative_val(x.get(2).toString()).length(length).type("card-tel").build();
+                lengthListBroad.getValue().add(builder);
             }
         });
     }
