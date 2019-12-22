@@ -108,8 +108,40 @@
 
 
 
+## spark-submit参数
+```$xslt
+spark2-submit \      # 第1行
+--class com.google.datalake.TestMain \      #第2行
+--master yarn \      # 第3行
+--deploy-mode client \      # 第4行
+--driver-memory 3g \      # 第5行
+--executor-memory 2g \      # 第6行
+--total-executor-cores 12 \      # 第7行
+--jars /home/jars/test-dep-1.0.0.jar,/home/jars/test-dep2-1.0.0.jar,/home/jars/test-dep3-1.0.0.jar \      # 第8行
+/home/release/jars/test-sql.jar \      # 第9行
+para1 \      # 第10行
+para2 \      # 第11行
+"test sql" \      # 第12行
+parax      # 第13行
+```
+### 示例分析
+- 第1行：指定该脚本是一个spark submit脚本（spark老版本是spark-submit，新版本spark2.x是spark2-submit）；
+- 第2行：指定main类的路径；
+- 第3行：指定master（使用第三方yarn作为spark集群的master）；
+- 第4行：指定deploy-mode（应用模式，driver进程运行在spark集群之外的机器，从集群角度来看该机器就像是一个client）；
+- 第5行：分配给driver的内存为3g，也可用m（兆）作为单位；
+- 第6行：分配给单个executor进程的内存为2g，也可用m（兆）作为单位；
+- 第7行：分配的所有executor核数（executor进程数最大值）；
+- 第8行：运行该spark application所需要额外添加的依赖jar，各依赖之间用逗号分隔；
+- 第9行：被提交给spark集群执行的application jar；
+- 第10～13行：传递给main方法的参数，按照添加顺序依次传入，如果某个参数含有空格则需要使用双引号将该参数扩起来；
 
-
+### spark submit脚本中各参数顺序的注意事项：
+- 每个参数（最后一个参数除外）后需要先空格再使用\表示结尾；
+- spark2-submit必须写在最前面；
+- class、master yarn、deploy-mode client等使用了--标注的参数的顺序可以相互调整；
+- application jar名这个参数必须写在使用了--标注的参数后；
+- 向main方法传递的参数必须写在application jar之后。
 
 
 
