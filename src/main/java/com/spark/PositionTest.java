@@ -27,12 +27,23 @@ public class PositionTest implements Serializable {
         //创建java的sparkContext
         JavaSparkContext javaSparkContext = new JavaSparkContext(spark.sparkContext());
 
+        Properties properties = new Properties();
+        properties.setProperty("user", "root");
+        properties.setProperty("password", "123456");
+
         //获取到身份证与电话号码的关联关系
         HashMap<String, Object> map = new HashMap<>();
         map.put("500230199611220431", "13903382632,1590287045122");
         map.put("500230199611220432", "15700770826");
         map.put("500230199611220433", "13106048981");
         Broadcast<HashMap<String, Object>> cardTelMap = javaSparkContext.broadcast(map);
+
+        //查詢數據庫，获取电话号码与身份证对应关系
+        Dataset<Row> user = spark.read().jdbc("jdbc:mysql://127.0.0.1:3306/yien", "yien_user", properties)
+                .select("user_card_no", "user_mobile_no").where(" user_card_no is not null and user_mobile_no is not null");
+        user.foreach( data -> {
+            cardTelMap.getValue().put(data.get(0).toString(), data.get(1));
+        });
 
         //读取到数据，并将数据转换为position对象
         JavaRDD<Position> mapJavaRDD = javaSparkContext.textFile("json.json", 5).mapPartitions(datas -> {
@@ -45,7 +56,7 @@ public class PositionTest implements Serializable {
         //过滤出身份证数据
         JavaRDD<Position> idCardRDD = mapJavaRDD.filter(x -> x.getJ() != 0 && x.getW() != 0 && x.getTel().length() == 18);
         //过滤出手机号码数据
-        JavaRDD<Position> telRDD = mapJavaRDD.filter(x ->  x.getJ() != 0 && x.getW() != 0 && x.getTel().length() == 11);
+        JavaRDD<Position> telRDD = mapJavaRDD.filter(x -> x.getJ() != 0 && x.getW() != 0 && x.getTel().length() == 11);
 
         //将手机号码RDD创建为DataSet，为了能够使用SQL查询方式
         Dataset<Row> telDataSet = spark.createDataFrame(telRDD, Position.class);
@@ -69,13 +80,9 @@ public class PositionTest implements Serializable {
 
         //将计算出的距离差距差了多大的集合写入到数据库中lengthListBroad
         Dataset<Row> lengthDataSet = spark.createDataFrame(lengthListBroad.getValue(), ReduceData.class);
-        System.out.println(lengthDataSet.count());
-        Properties properties = new Properties();
-        properties.setProperty("user","root");
-        properties.setProperty("password","123456");
-        //指定模式，以追加的方式 Overwrite 覆盖   ErrorIfExists存在则报错   Ignore 忽略  append 追加
-        lengthDataSet.write().mode(SaveMode.Append).jdbc("jdbc:mysql://127.0.0.1:3306/yien","reduce",properties);
 
+        //指定模式，以追加的方式 Overwrite 覆盖   ErrorIfExists存在则报错   Ignore 忽略  append 追加
+        lengthDataSet.write().mode(SaveMode.Append).jdbc("jdbc:mysql://127.0.0.1:3306/yien", "reduce", properties);
 
         spark.stop();
         javaSparkContext.stop();
@@ -83,6 +90,7 @@ public class PositionTest implements Serializable {
 
     /**
      * SparkSQL查询对应的数据，并执行经纬度位置差异计算
+     *
      * @param dataset
      * @param startTime
      * @param endTime
@@ -117,6 +125,7 @@ public class PositionTest implements Serializable {
 
     /**
      * 创建时间范围
+     *
      * @param type
      * @param range
      * @param time
@@ -134,18 +143,18 @@ public class PositionTest implements Serializable {
      * 经纬度计算
      */
     private static double EARTH_RADIUS = 6371.393;
-    private static double rad(double d)
-    {
+
+    private static double rad(double d) {
         return d * Math.PI / 180.0;
     }
-    public static double GetDistance(double lat1, double lng1, double lat2, double lng2)
-    {
+
+    public static double GetDistance(double lat1, double lng1, double lat2, double lng2) {
         double radLat1 = rad(lat1);
         double radLat2 = rad(lat2);
         double a = radLat1 - radLat2;
         double b = rad(lng1) - rad(lng2);
-        double s = 2 * Math.asin(Math.sqrt(Math.abs(Math.pow(Math.sin(a/2),2) +
-                Math.cos(radLat1)*Math.cos(radLat2)*Math.pow(Math.sin(b/2),2))));
+        double s = 2 * Math.asin(Math.sqrt(Math.abs(Math.pow(Math.sin(a / 2), 2) +
+                Math.cos(radLat1) * Math.cos(radLat2) * Math.pow(Math.sin(b / 2), 2))));
         s = s * EARTH_RADIUS;
         s = Math.round(s * 1000);
         return s;

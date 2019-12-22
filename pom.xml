@@ -7,47 +7,72 @@
     <groupId>com.spark</groupId>
     <artifactId>spark1</artifactId>
     <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
 
-<dependencies>
-    <dependency>
-        <groupId>org.apache.spark</groupId>
-        <artifactId>spark-core_2.12</artifactId>
-        <version>2.4.4</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.spark</groupId>
-        <artifactId>spark-sql_2.12</artifactId>
-        <version>2.4.4</version>
-    </dependency>
-<!--    <dependency>-->
-<!--        <groupId>com.google.guava</groupId>-->
-<!--        <artifactId>guava</artifactId>-->
-<!--        <version>19.0</version>-->
-<!--    </dependency>-->
-<!--    <dependency>-->
-<!--        　　<groupId>org.gavaghan</groupId>-->
-<!--        　　<artifactId>geodesy</artifactId>-->
-<!--        　　<version>1.1.3</version>-->
-<!--    </dependency>-->
-    <dependency>
-        <groupId>com.alibaba</groupId>
-        <artifactId>fastjson</artifactId>
-        <version>1.2.58</version>
-    </dependency>
-    <dependency>
-        <groupId>mysql</groupId>
-        <artifactId>mysql-connector-java</artifactId>
-        <version>5.1.46</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.spark</groupId>
-        <artifactId>spark-sql_2.12</artifactId>
-        <version>2.4.4</version>
-    </dependency>
-    <dependency>
-        <groupId>org.projectlombok</groupId>
-        <artifactId>lombok</artifactId>
-        <version>1.16.20</version>
-    </dependency>
-</dependencies>
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-core_2.12</artifactId>
+            <version>2.4.4</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_2.12</artifactId>
+            <version>2.4.4</version>
+        </dependency>
+        <!--    <dependency>-->
+        <!--        <groupId>com.google.guava</groupId>-->
+        <!--        <artifactId>guava</artifactId>-->
+        <!--        <version>19.0</version>-->
+        <!--    </dependency>-->
+        <!--    <dependency>-->
+        <!--        　　<groupId>org.gavaghan</groupId>-->
+        <!--        　　<artifactId>geodesy</artifactId>-->
+        <!--        　　<version>1.1.3</version>-->
+        <!--    </dependency>-->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>1.2.58</version>
+        </dependency>
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>5.1.46</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_2.12</artifactId>
+            <version>2.4.4</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.16.20</version>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
