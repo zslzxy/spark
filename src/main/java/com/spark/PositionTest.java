@@ -14,6 +14,8 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * @author ${张世林}
@@ -44,14 +46,16 @@ public class PositionTest implements Serializable {
             return res.iterator();
         });
         //过滤出身份证数据
-        JavaRDD<Position> idCardRDD = mapJavaRDD.filter(x -> x.getTel().length() == 18);
+        JavaRDD<Position> idCardRDD = mapJavaRDD.filter(x -> x.getJ() != 0 && x.getW() != 0 && x.getTel().length() == 18);
         //过滤出手机号码数据
-        JavaRDD<Position> telRDD = mapJavaRDD.filter(x -> x.getTel().length() == 11);
+        JavaRDD<Position> telRDD = mapJavaRDD.filter(x ->  x.getJ() != 0 && x.getW() != 0 && x.getTel().length() == 11);
 
         //将手机号码RDD创建为DataSet，为了能够使用SQL查询方式
         Dataset<Row> telDataSet = spark.createDataFrame(telRDD, Position.class);
         telDataSet.createOrReplaceGlobalTempView("telView");
 //        Broadcast<Dataset<Row>> telDataSetBroad = javaSparkContext.broadcast(telDataSet);
+
+        Broadcast<List<Map<String, Object>>> lengthListBroad = javaSparkContext.broadcast(new CopyOnWriteArrayList<>());
 
         //将身份证转成集合，遍历集合，计算该身份证所属手机具有哪一些经纬度差异较大的数据
         idCardRDD.collect().forEach(idCard -> {
@@ -60,7 +64,8 @@ public class PositionTest implements Serializable {
             Object tel = cardTelMap.getValue().get(card);
             String tels = tel != null ? "'" + StringUtils.join(tel.toString().split(","), "','") + "'" : "";
             if (tels != "") {
-                rowDataset(telDataSet, rangeTime("-", 10000, event_id), rangeTime("+", 10000, event_id), tels);
+                rowDataset(telDataSet, rangeTime("-", 10000, event_id), rangeTime("+", 10000, event_id), tels, card, lengthListBroad);
+                System.out.println(lengthListBroad.getValue().size());
             }
         });
         spark.stop();
@@ -75,18 +80,29 @@ public class PositionTest implements Serializable {
      * @param tels
      * @return
      */
-    private static Dataset<Row> rowDataset(Dataset<Row> dataset, long startTime, long endTime, String tels) {
+    private static void rowDataset(Dataset<Row> dataset, long startTime, long endTime, String tels, String card, Broadcast<List<Map<String, Object>>> lengthListBroad) {
         String sql = "select J,W,tel from global_temp.telView where event_id between " + startTime + " and " + endTime + " and tel in (" + tels + ")";
         SQLContext sqlContext = dataset.sqlContext();
-        Dataset<Row> rowDataset = sqlContext.sql(sql).sample(0.5);
+        Dataset<Row> rowDataset = sqlContext.sql(sql);
 //        Dataset<Row> rowDataset = dataset.where("event_id between " + startTime + " and " + endTime).where("tel in (" + tels + ")").select("j,w,tel");
+
         rowDataset.foreach(x -> {
-            Double lng = Double.valueOf(x.get(0).toString());
-            Double lat = Double.valueOf(x.get(1).toString());
-            double length = GetDistance(lat, lng, lat - 0.5, lng - 0.5);
-            System.out.println(length);
+            double lng = Double.valueOf(x.get(0).toString());
+            double lat = Double.valueOf(x.get(1).toString());
+            double lng1 = lng - 0.5;
+            double lat1 = lat - 0.5;
+            double length = GetDistance(lat, lng, lat1, lng1);
+            if (length > 100) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("tel", x.get(1).toString());
+                map.put("J",lng);
+                map.put("W",lat);
+                map.put("J1",lng1);
+                map.put("W1",lat1);
+                map.put("card",card);
+                lengthListBroad.getValue().add(map);
+            }
         });
-        return rowDataset;
     }
 
     /**
