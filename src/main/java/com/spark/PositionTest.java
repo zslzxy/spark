@@ -5,14 +5,16 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
-import org.apache.spark.sql.*;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.SparkSession;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * @author ${张世林}
@@ -40,7 +42,7 @@ public class PositionTest implements Serializable {
 
         //查詢數據庫，获取电话号码与身份证对应关系
         Dataset<Row> user = spark.read().jdbc("jdbc:mysql://127.0.0.1:3306/yien", "yien_user", properties)
-                .select("user_card_no", "user_mobile_no").where(" user_card_no is not null and user_mobile_no is not null");
+                .select("user_card_no", "user_mobile_no").where(" user_card_no is not null").where("user_mobile_no is not null");
         user.foreach( data -> {
             cardTelMap.getValue().put(data.get(0).toString(), data.get(1));
         });
@@ -60,12 +62,11 @@ public class PositionTest implements Serializable {
 
         //将手机号码RDD创建为DataSet，为了能够使用SQL查询方式
         Dataset<Row> telDataSet = spark.createDataFrame(telRDD, Position.class);
-//        telDataSet.createOrReplaceGlobalTempView("telView");
         telDataSet.createOrReplaceTempView("telView");
-//        Broadcast<Dataset<Row>> telDataSetBroad = javaSparkContext.broadcast(telDataSet);
 
         //该变量主要是要与存储距离相差的所有对象
-        Broadcast<List<ReduceData>> lengthListBroad = javaSparkContext.broadcast(new CopyOnWriteArrayList<>());
+        MyAccumulator lengthListBroad = new MyAccumulator();
+        javaSparkContext.sc().register(lengthListBroad);
 
         //将身份证转成集合，遍历集合，计算该身份证所属手机具有哪一些经纬度差异较大的数据
         idCardRDD.collect().forEach(idCard -> {
@@ -75,12 +76,14 @@ public class PositionTest implements Serializable {
             String tels = tel != null ? "'" + StringUtils.join(tel.toString().split(","), "','") + "'" : "";
             if (tels != "") {
                 rowDataset(telDataSet, rangeTime("-", 10000, event_id), rangeTime("+", 10000, event_id), tels, card, lengthListBroad);
-                System.out.println(lengthListBroad.getValue().size());
+                for (ReduceData reduceData : lengthListBroad.value()) {
+                    System.out.println(reduceData);
+                }
             }
         });
 
         //将计算出的距离差距差了多大的集合写入到数据库中lengthListBroad
-        Dataset<Row> lengthDataSet = spark.createDataFrame(lengthListBroad.getValue(), ReduceData.class);
+        Dataset<Row> lengthDataSet = spark.createDataFrame(lengthListBroad.value(), ReduceData.class);
 
         //指定模式，以追加的方式 Overwrite 覆盖   ErrorIfExists存在则报错   Ignore 忽略  append 追加
         lengthDataSet.write().mode(SaveMode.Append).jdbc("jdbc:mysql://127.0.0.1:3306/yien", "reduce", properties);
@@ -98,29 +101,17 @@ public class PositionTest implements Serializable {
      * @param tels
      * @return
      */
-    private static void rowDataset(Dataset<Row> dataset, long startTime, long endTime, String tels, String card, Broadcast<List<ReduceData>> lengthListBroad) {
-//        String sql = "select J,W,tel from global_temp.telView where event_id between " + startTime + " and " + endTime + " and tel in (" + tels + ")";
-        String sql = "select J,W,tel from telView where event_id between " + startTime + " and " + endTime + " and tel in (" + tels + ")";
-        SQLContext sqlContext = dataset.sqlContext();
-        Dataset<Row> rowDataset = sqlContext.sql(sql);
-//        Dataset<Row> rowDataset = dataset.where("event_id between " + startTime + " and " + endTime).where("tel in (" + tels + ")").select("j,w,tel");
-
-        rowDataset.foreach(x -> {
+    private static void rowDataset(Dataset<Row> dataset, long startTime, long endTime, String tels, String card, MyAccumulator lengthListBroad) {
+        Dataset<Row> rowDataset = dataset.where("event_id between " + startTime + " and " + endTime).where("tel in (" + tels + ")").select("j","w","tel");
+        rowDataset.javaRDD().collect().forEach(x -> {
             double lng = Double.valueOf(x.get(0).toString());
             double lat = Double.valueOf(x.get(1).toString());
             double lng1 = lng - 0.2;
             double lat1 = lat - 0.2;
             double length = GetDistance(lat, lng, lat1, lng1);
             if (length > 100) {
-//                Map<String, Object> map = new HashMap<>();
-//                map.put("tel", x.get(1).toString());
-//                map.put("J",lng);
-//                map.put("W",lat);
-//                map.put("J1",lng1);
-//                map.put("W1",lat1);
-//                map.put("card",card);
                 ReduceData builder = ReduceData.builder().lat(lat).lat1(lat1).lng(lng).lng1(lng1).center_val(card).relative_val(x.get(2).toString()).length(length).type("card-tel").build();
-                lengthListBroad.getValue().add(builder);
+                lengthListBroad.add(builder);
             }
         });
     }
@@ -140,7 +131,6 @@ public class PositionTest implements Serializable {
         return time - range;
     }
 
-
     /**
      * 经纬度计算
      */
@@ -150,7 +140,7 @@ public class PositionTest implements Serializable {
         return d * Math.PI / 180.0;
     }
 
-    public static double GetDistance(double lat1, double lng1, double lat2, double lng2) {
+    private static double GetDistance(double lat1, double lng1, double lat2, double lng2) {
         double radLat1 = rad(lat1);
         double radLat2 = rad(lat2);
         double a = radLat1 - radLat2;
@@ -163,3 +153,5 @@ public class PositionTest implements Serializable {
     }
 
 }
+
+
