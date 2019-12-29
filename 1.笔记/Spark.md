@@ -163,6 +163,7 @@ spark-submit --master yarn \
 > 添加，后面是输出打印日志    */5 * * * * root su - hdfs -c /app/start.sh >> /app/spark.log
 
 
-
+## Spark内存管理
+> Spark内存管理是主要针对Driver与Exceutor两个方面；
 
 
